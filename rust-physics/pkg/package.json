@@ -1,0 +1,17 @@
+{
+  "name": "rust-physics",
+  "type": "module",
+  "description": "Normalized solar system physics for the browser",
+  "version": "0.2.0",
+  "license": "MIT",
+  "files": [
+    "rust_physics_bg.wasm",
+    "rust_physics.js",
+    "rust_physics.d.ts"
+  ],
+  "main": "rust_physics.js",
+  "types": "rust_physics.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
