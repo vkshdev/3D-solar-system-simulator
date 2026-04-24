@@ -1,6 +1,10 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import init, { GravitySimulation } from "../rust-physics/pkg/rust_physics.js";
+import { inject } from "@vercel/analytics";
+
+// Initialize Vercel Web Analytics
+inject();
 
 const DISTANCE_SCALE = 1.18;
 const QUALITY = { starCount: 3600, trailLength: 190, trailStep: 3, pixelRatio: 1.8 };
