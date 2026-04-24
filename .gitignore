@@ -3,7 +3,6 @@ dist/
 .vite/
 .vercel/
 
-rust-physics/pkg/
 rust-physics/target/
 target/
 
