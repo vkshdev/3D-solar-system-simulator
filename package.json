@@ -1,6 +1,5 @@
 {
   "name": "3d-solar-system-simulator",
-  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
