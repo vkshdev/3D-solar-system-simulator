@@ -6,7 +6,7 @@ const FIXED_TIME_STEP: f64 = 1.0 / 360.0;
 const MAX_FRAME_TIME: f64 = 0.25;
 const SOFTENING: f64 = 0.01;
 const MAX_STEPS_PER_FRAME: usize = 180;
-const TIME_SCALE: f64 = 0.075;
+const TIME_SCALE: f64 = 0.75;
 
 #[derive(Clone)]
 struct BodyState {
