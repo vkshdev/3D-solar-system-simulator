@@ -3,6 +3,18 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import init, { GravitySimulation } from "../rust-physics/pkg/rust_physics.js";
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
+import {
+  createMilkyWayStars,
+  createSolarAnchor,
+  createInterstellarDustLanes,
+  createFermiBubbles,
+  getGalacticViewPresets,
+  GALACTIC_CONSTANTS
+} from "./galaxy/index.ts";
+import { createSagittariusACore } from "./shaders/index.ts";
+import { ScaleController } from "./camera/index.ts";
+import { GalacticRadar, LogarithmicScaleBar, TargetInspector } from "./ui/index.ts";
+import { PerformanceManager } from "./performance/index.ts";
 
 // Initialize Vercel Web Analytics
 inject();
@@ -10,84 +22,152 @@ inject();
 // Initialize Vercel Speed Insights
 injectSpeedInsights();
 
+export interface BodyMetadata {
+  name: string;
+  radius: number;
+  color: string;
+  trail_color: string;
+  glow_color: string;
+  parent_index?: number | null;
+  is_sun: boolean;
+}
+
+export interface BodyVisualEntry {
+  metadata: BodyMetadata;
+  root: THREE.Group;
+  mesh: THREE.Mesh;
+  glow: THREE.Mesh;
+  material: THREE.MeshStandardMaterial;
+  atmosphere?: THREE.Mesh | null;
+  haloInner?: THREE.Sprite;
+  haloOuter?: THREE.Sprite;
+  corona?: THREE.Mesh;
+  ring?: THREE.Mesh;
+}
+
+export interface TrailEntry {
+  line: THREE.Line;
+  history: THREE.Vector3[];
+  maxPoints: number;
+}
+
+export interface CometEntry {
+  head: THREE.Sprite;
+  tailSprites: THREE.Sprite[];
+  radiusX: number;
+  radiusY: number;
+  depth: number;
+  speed: number;
+  angle: number;
+  lastPosition: THREE.Vector3;
+  initialized: boolean;
+}
+
+export interface PlanetProfile {
+  map: THREE.CanvasTexture;
+  roughness: number;
+  emissiveIntensity: number;
+  glowOpacity: number;
+  atmosphereOpacity: number;
+  atmosphereColor?: string;
+  haloTexture?: THREE.CanvasTexture;
+}
+
 const DISTANCE_SCALE = 1.18;
+const GALAXY_SCALE = 50.0; // 1 kpc = 50 world units
 const QUALITY = { starCount: 3600, trailLength: 190, trailStep: 3, pixelRatio: 1.8 };
-const GESTURE_WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+const perfManager = new PerformanceManager();
 
 const refs = {
-  canvas: document.querySelector("#scene"),
-  gestureVideo: document.querySelector("#gesture-video")
+  canvas: document.querySelector("#scene") as HTMLCanvasElement
 };
 
-const renderer = new THREE.WebGLRenderer({ canvas: refs.canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({
+  canvas: refs.canvas,
+  antialias: true,
+  alpha: false,
+  logarithmicDepthBuffer: true
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.pixelRatio));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, perfManager.getConfig().maxPixelRatio));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.22;
 renderer.setClearColor("#010308");
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2("#03060d", 0.00085);
+scene.fog = new THREE.FogExp2("#03060d", 0.00015);
 
-const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.1, 2600);
-camera.position.set(0, 40, 170);
+// Solar System Galactocentric Anchor position: [0.0, 0.02, 8.20] kpc * 50 = [0, 1, 410]
+const solarGalacticPos = new THREE.Vector3(
+  GALACTIC_CONSTANTS.SOLAR_POSITION.x * GALAXY_SCALE,
+  GALACTIC_CONSTANTS.SOLAR_POSITION.y * GALAXY_SCALE,
+  GALACTIC_CONSTANTS.SOLAR_POSITION.z * GALAXY_SCALE
+);
+
+const solarSystemGroup = new THREE.Group();
+solarSystemGroup.position.copy(solarGalacticPos);
+scene.add(solarSystemGroup);
+
+const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.1, 9500);
+camera.position.copy(solarGalacticPos).add(new THREE.Vector3(0, 40, 170));
 
 const controls = new OrbitControls(camera, refs.canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.enablePan = false;
-controls.minDistance = 16;
-controls.maxDistance = 760;
-controls.target.set(0, 0, 0);
+controls.enablePan = true;
+controls.minDistance = 12;
+controls.maxDistance = 4200;
+controls.target.copy(solarGalacticPos);
 
 const ambientLight = new THREE.AmbientLight("#80a4ff", 0.22);
 const hemisphereLight = new THREE.HemisphereLight("#6e90ff", "#050a12", 0.42);
 const sunLight = new THREE.PointLight("#ffd089", 4.1, 2200, 1.35);
-scene.add(ambientLight, hemisphereLight, sunLight);
+scene.add(ambientLight, hemisphereLight);
+solarSystemGroup.add(sunLight);
 
-let simulation;
-let metadata = [];
-let bodyEntries = [];
-let trailEntries = [];
-let nebulaGroup;
-let starGroup;
-let cometEntries = [];
-let gravityFieldGroup;
-let orbitGuideGroup;
-let moonGuide;
+let simulation: GravitySimulation;
+let metadata: BodyMetadata[] = [];
+let bodyEntries: BodyVisualEntry[] = [];
+let trailEntries: TrailEntry[] = [];
+let nebulaGroup: THREE.Group | undefined;
+let starGroup: THREE.Group | undefined;
+let cometEntries: CometEntry[] = [];
+let gravityFieldGroup: THREE.Group | undefined;
+let orbitGuideGroup: THREE.Group | undefined;
+let moonGuide: THREE.LineLoop | undefined;
 let trailFrameCounter = 0;
+let milkyWay: ReturnType<typeof createMilkyWayStars> | null = null;
+let solarAnchor: ReturnType<typeof createSolarAnchor> | null = null;
+let scaleController: ScaleController | null = null;
+let sagittariusA: ReturnType<typeof createSagittariusACore> | null = null;
+let dustLanes: ReturnType<typeof createInterstellarDustLanes> | null = null;
+let fermiBubbles: ReturnType<typeof createFermiBubbles> | null = null;
+let galacticRadar: GalacticRadar | null = null;
+let logScaleBar: LogarithmicScaleBar | null = null;
+let targetInspector: TargetInspector | null = null;
 
-const gestureState = {
-  stream: null,
-  vision: null,
-  handLandmarker: null,
-  FilesetResolver: null,
-  HandLandmarker: null,
-  lastVideoTime: -1,
-  lastPinchDistance: null,
-  lastPalmToggleAt: 0,
-  enabled: false
-};
 
-function hexColor(hex) {
+function hexColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
 }
 
-function seededRandom(seed) {
+function seededRandom(seed: number): number {
   const x = Math.sin(seed * 127.1) * 43758.5453123;
   return x - Math.floor(x);
 }
 
-function createSurfaceCanvas(width = 1024, height = 512) {
+function createSurfaceCanvas(width = 1024, height = 512): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  return { canvas, ctx: canvas.getContext("2d") };
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not acquire 2D canvas context");
+  return { canvas, ctx };
 }
 
-function createRadialTexture(stops, width = 512, height = 512) {
+function createRadialTexture(stops: Array<{ offset: number; color: string }>, width = 512, height = 512): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas(width, height);
   const gradient = ctx.createRadialGradient(width * 0.5, height * 0.5, 0, width * 0.5, height * 0.5, width * 0.5);
   stops.forEach((stop) => gradient.addColorStop(stop.offset, stop.color));
@@ -98,21 +178,21 @@ function createRadialTexture(stops, width = 512, height = 512) {
   return texture;
 }
 
-function createSoftCloudTexture(primaryHex, secondaryHex, accentHex, width = 1024, height = 1024) {
+function createSoftCloudTexture(primaryHex: string, secondaryHex: string, accentHex: string, width = 1024, height = 1024): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas(width, height);
   const primary = hexColor(primaryHex);
   const secondary = hexColor(secondaryHex);
   const accent = hexColor(accentHex);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < 22; i += 1) {
+  for (let i = 0; i < 6; i += 1) {
     const x = seededRandom(i + 11) * canvas.width;
     const y = seededRandom(i + 31) * canvas.height;
-    const radius = 120 + seededRandom(i + 71) * 280;
+    const radius = 70 + seededRandom(i + 71) * 140;
     const color = primary.clone().lerp(secondary, seededRandom(i + 121)).lerp(accent, seededRandom(i + 191) * 0.2);
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, 0.22)`);
-    gradient.addColorStop(0.42, `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, 0.1)`);
+    gradient.addColorStop(0, `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, 0.06)`);
+    gradient.addColorStop(0.45, `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, 0.02)`);
     gradient.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -125,7 +205,7 @@ function createSoftCloudTexture(primaryHex, secondaryHex, accentHex, width = 102
   return texture;
 }
 
-function createRockyTexture(baseHex, accentHex, craterHex, ridgeHex) {
+function createRockyTexture(baseHex: string, accentHex: string, craterHex: string, ridgeHex: string): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
   const base = hexColor(baseHex);
   const accent = hexColor(accentHex);
@@ -166,7 +246,7 @@ function createRockyTexture(baseHex, accentHex, craterHex, ridgeHex) {
   return texture;
 }
 
-function createEarthTexture() {
+function createEarthTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
   const ocean = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
   ocean.addColorStop(0, "#0d3d71");
@@ -195,7 +275,7 @@ function createEarthTexture() {
   return texture;
 }
 
-function createGasTexture(baseHex, bandHexA, bandHexB, stormHex) {
+function createGasTexture(baseHex: string, bandHexA: string, bandHexB: string, stormHex: string): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
   const base = hexColor(baseHex);
   const bandA = hexColor(bandHexA);
@@ -230,7 +310,7 @@ function createGasTexture(baseHex, bandHexA, bandHexB, stormHex) {
   return texture;
 }
 
-function createVenusTexture() {
+function createVenusTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
   gradient.addColorStop(0, "#c89c63");
@@ -251,7 +331,8 @@ function createVenusTexture() {
   texture.anisotropy = 8;
   return texture;
 }
-function createSunTexture() {
+
+function createSunTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
   const radial = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, 8, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.54);
   radial.addColorStop(0, "#fff4b3");
@@ -290,7 +371,7 @@ function createSunTexture() {
   return texture;
 }
 
-function createRingTexture() {
+function createRingTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas(1024, 128);
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
   gradient.addColorStop(0, "rgba(210, 188, 145, 0.0)");
@@ -312,7 +393,7 @@ function createRingTexture() {
   return texture;
 }
 
-function getPlanetProfile(bodyMeta) {
+function getPlanetProfile(bodyMeta: BodyMetadata): PlanetProfile {
   switch (bodyMeta.name) {
     case "Sun":
       return {
@@ -351,13 +432,11 @@ function getPlanetProfile(bodyMeta) {
   }
 }
 
-function createNebulaField() {
+function createNebulaField(): void {
   nebulaGroup = new THREE.Group();
-  const setups = [
-    { pos: [-340, 170, -520], scale: [520, 320, 1], colors: ["#3f57c6", "#7f3ed1", "#d04bf0"] },
-    { pos: [390, -140, -620], scale: [560, 340, 1], colors: ["#0f8fb6", "#4ae0d1", "#6c5cff"] },
-    { pos: [-80, -230, -470], scale: [460, 270, 1], colors: ["#273f9f", "#4c9df2", "#ff884d"] },
-    { pos: [120, 220, -700], scale: [640, 360, 1], colors: ["#6136be", "#d34f9f", "#f0a257"] }
+  const setups: Array<{ pos: [number, number, number]; scale: [number, number, number]; colors: [string, string, string] }> = [
+    { pos: [-180, 110, -950], scale: [320, 190, 1], colors: ["#24357a", "#4a247d", "#6e298d"] },
+    { pos: [210, -90, -1100], scale: [360, 210, 1], colors: ["#094d66", "#23857d", "#362d85"] }
   ];
 
   setups.forEach((setup, index) => {
@@ -366,7 +445,7 @@ function createNebulaField() {
       new THREE.MeshBasicMaterial({
         map: createSoftCloudTexture(setup.colors[0], setup.colors[1], setup.colors[2]),
         transparent: true,
-        opacity: 0.34,
+        opacity: 0.09,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide
@@ -375,13 +454,13 @@ function createNebulaField() {
     mesh.position.set(...setup.pos);
     mesh.scale.set(...setup.scale);
     mesh.rotation.z = index * 0.23;
-    nebulaGroup.add(mesh);
+    nebulaGroup!.add(mesh);
   });
 
-  scene.add(nebulaGroup);
+  solarSystemGroup.add(nebulaGroup);
 }
 
-function createStarField() {
+function createStarField(): void {
   starGroup = new THREE.Group();
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(QUALITY.starCount * 3);
@@ -404,13 +483,13 @@ function createStarField() {
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 1.18, sizeAttenuation: true, transparent: true, opacity: 0.96, vertexColors: true, depthWrite: false }));
   starGroup.add(points);
-  scene.add(starGroup);
+  solarSystemGroup.add(starGroup);
 }
 
-function createGravityNet(size = 240, divisions = 28) {
+function createGravityNet(size = 240, divisions = 28): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.LineBasicMaterial({ color: "#4da8ff", transparent: true, opacity: 0.18 });
-  const depthAt = (x, z) => {
+  const depthAt = (x: number, z: number) => {
     const r = Math.sqrt(x * x + z * z);
     return -9 * Math.exp(-(r * r) / 2800) - 2.1 / (1 + r * 0.08);
   };
@@ -419,8 +498,8 @@ function createGravityNet(size = 240, divisions = 28) {
 
   for (let i = 0; i <= divisions; i += 1) {
     const x = -half + i * step;
-    const pointsX = [];
-    const pointsZ = [];
+    const pointsX: THREE.Vector3[] = [];
+    const pointsZ: THREE.Vector3[] = [];
     for (let j = 0; j <= divisions; j += 1) {
       const z = -half + j * step;
       pointsX.push(new THREE.Vector3(x, depthAt(x, z), z));
@@ -440,8 +519,8 @@ function createGravityNet(size = 240, divisions = 28) {
   return group;
 }
 
-function createOrbitPath(radius, color, inclination = 0, segments = 180) {
-  const points = [];
+function createOrbitPath(radius: number, color: string | THREE.Color, inclination = 0, segments = 180): THREE.LineLoop {
+  const points: THREE.Vector3[] = [];
   for (let i = 0; i <= segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
     const x = Math.cos(angle) * radius;
@@ -451,7 +530,8 @@ function createOrbitPath(radius, color, inclination = 0, segments = 180) {
   }
   return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.24 }));
 }
-function createBodyVisual(bodyMeta, index) {
+
+function createBodyVisual(bodyMeta: BodyMetadata, index: number): BodyVisualEntry {
   const root = new THREE.Group();
   root.userData.bodyIndex = index;
 
@@ -473,7 +553,7 @@ function createBodyVisual(bodyMeta, index) {
   );
   root.add(glow);
 
-  let atmosphere = null;
+  let atmosphere: THREE.Mesh | null = null;
   if (profile.atmosphereOpacity > 0) {
     atmosphere = new THREE.Mesh(
       new THREE.SphereGeometry(bodyMeta.radius * 1.1, 34, 34),
@@ -482,44 +562,46 @@ function createBodyVisual(bodyMeta, index) {
     root.add(atmosphere);
   }
 
-  const extras = {};
+  let haloInner: THREE.Sprite | undefined;
+  let haloOuter: THREE.Sprite | undefined;
+  let corona: THREE.Mesh | undefined;
+  let ring: THREE.Mesh | undefined;
+
   if (bodyMeta.is_sun) {
-    const haloInner = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#fff0a8", transparent: true, opacity: 0.62, depthWrite: false, blending: THREE.AdditiveBlending }));
+    haloInner = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#fff0a8", transparent: true, opacity: 0.62, depthWrite: false, blending: THREE.AdditiveBlending }));
     haloInner.scale.setScalar(bodyMeta.radius * 6.2);
-    const haloOuter = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#ff993f", transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+    haloOuter = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#ff993f", transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
     haloOuter.scale.setScalar(bodyMeta.radius * 10.5);
-    const corona = new THREE.Mesh(
+    corona = new THREE.Mesh(
       new THREE.SphereGeometry(bodyMeta.radius * 1.22, 40, 40),
       new THREE.MeshBasicMaterial({ color: "#ffb056", transparent: true, opacity: 0.16, depthWrite: false })
     );
     root.add(corona, haloInner, haloOuter);
-    Object.assign(extras, { haloInner, haloOuter, corona });
   }
 
   if (bodyMeta.name === "Saturn") {
-    const ring = new THREE.Mesh(
+    ring = new THREE.Mesh(
       new THREE.RingGeometry(bodyMeta.radius * 1.7, bodyMeta.radius * 3.2, 160),
       new THREE.MeshBasicMaterial({ map: createRingTexture(), color: "#e1d6a8", transparent: true, opacity: 0.66, side: THREE.DoubleSide, depthWrite: false })
     );
     ring.rotation.x = Math.PI / 2.62;
     root.add(ring);
-    extras.ring = ring;
   }
 
-  scene.add(root);
-  return { metadata: bodyMeta, root, mesh, glow, material, atmosphere, ...extras };
+  solarSystemGroup.add(root);
+  return { metadata: bodyMeta, root, mesh, glow, material, atmosphere, haloInner, haloOuter, corona, ring };
 }
 
-function createTrail(bodyMeta) {
+function createTrail(bodyMeta: BodyMetadata): TrailEntry {
   const line = new THREE.Line(
     new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: bodyMeta.trail_color, transparent: true, opacity: 0.12 })
   );
-  scene.add(line);
+  solarSystemGroup.add(line);
   return { line, history: [], maxPoints: QUALITY.trailLength };
 }
 
-function createCometMaterial(innerColor, outerColor) {
+function createCometMaterial(innerColor: string, outerColor: string): THREE.SpriteMaterial {
   return new THREE.SpriteMaterial({
     map: createRadialTexture([
       { offset: 0, color: innerColor },
@@ -536,28 +618,30 @@ const cometPosition = new THREE.Vector3();
 const cometDirection = new THREE.Vector3();
 const cometDrift = new THREE.Vector3();
 
-function createComets() {
-  cometEntries = [
+function createComets(): void {
+  const configs = [
     { head: ["rgba(245, 252, 255, 1)", "rgba(118, 202, 255, 0.5)"], tail: ["rgba(174, 229, 255, 0.45)", "rgba(92, 164, 255, 0.08)"], radiusX: 300, radiusY: 126, depth: -320, speed: 0.034, angle: 0.3 },
     { head: ["rgba(255, 246, 226, 1)", "rgba(255, 183, 112, 0.46)"], tail: ["rgba(255, 216, 166, 0.42)", "rgba(255, 166, 84, 0.08)"], radiusX: 420, radiusY: 154, depth: -430, speed: 0.024, angle: Math.PI }
-  ].map((config) => {
+  ];
+
+  cometEntries = configs.map((config) => {
     const head = new THREE.Sprite(createCometMaterial(config.head[0], config.head[1]));
     head.scale.set(6, 6, 1);
 
     const tailSprites = Array.from({ length: 16 }, (_, index) => {
       const sprite = new THREE.Sprite(createCometMaterial(config.tail[0], config.tail[1]));
       sprite.scale.set(18 - index * 0.75, 6.5 - index * 0.22, 1);
-      sprite.material.opacity = 0.46 - index * 0.022;
-      scene.add(sprite);
+      (sprite.material as THREE.SpriteMaterial).opacity = 0.46 - index * 0.022;
+      solarSystemGroup.add(sprite);
       return sprite;
     });
 
-    scene.add(head);
+    solarSystemGroup.add(head);
     return { ...config, head, tailSprites, lastPosition: new THREE.Vector3(), initialized: false };
   });
 }
 
-function createGravityField(initialFlatPositions) {
+function createGravityField(initialFlatPositions: number[]): void {
   gravityFieldGroup = new THREE.Group();
   gravityFieldGroup.add(createGravityNet());
 
@@ -574,11 +658,11 @@ function createGravityField(initialFlatPositions) {
     const relative = body.sub(sun);
     const radius = Math.sqrt(relative.x * relative.x + relative.z * relative.z);
     const inclination = Math.atan2(relative.y, Math.max(radius, 0.001));
-    orbitGuideGroup.add(createOrbitPath(radius, bodyMeta.trail_color, inclination));
+    orbitGuideGroup!.add(createOrbitPath(radius, bodyMeta.trail_color, inclination));
   });
 
   gravityFieldGroup.add(orbitGuideGroup);
-  scene.add(gravityFieldGroup);
+  solarSystemGroup.add(gravityFieldGroup);
 
   const earthIndex = metadata.findIndex((bodyMeta) => bodyMeta.name === "Earth");
   const moonIndex = metadata.findIndex((bodyMeta) => bodyMeta.name === "Moon");
@@ -590,12 +674,12 @@ function createGravityField(initialFlatPositions) {
   moonGuide = createOrbitPath(moonRadius, "#e8edf6", moonInclination, 96);
 }
 
-function buildFocus() {
-  controls.target.set(0, 0, 0);
+function buildFocus(): void {
+  controls.target.copy(solarSystemGroup.position);
   controls.update();
 }
 
-function updateBodyPositions(flatPositions) {
+function updateBodyPositions(flatPositions: ArrayLike<number>): void {
   for (let i = 0; i < bodyEntries.length; i += 1) {
     const offset = i * 3;
     bodyEntries[i].root.position.set(
@@ -606,7 +690,9 @@ function updateBodyPositions(flatPositions) {
   }
 
   sunLight.position.copy(bodyEntries[0].root.position);
-  controls.target.copy(bodyEntries[0].root.position);
+  if (scaleController && !scaleController.isTransitioning && scaleController.currentTargetKey === "sol") {
+    controls.target.copy(solarSystemGroup.position).add(bodyEntries[0].root.position);
+  }
 
   if (gravityFieldGroup) {
     gravityFieldGroup.position.copy(bodyEntries[0].root.position);
@@ -620,7 +706,7 @@ function updateBodyPositions(flatPositions) {
   }
 }
 
-function updateTrails() {
+function updateTrails(): void {
   trailFrameCounter += 1;
   if (trailFrameCounter % QUALITY.trailStep !== 0) {
     return;
@@ -635,8 +721,9 @@ function updateTrails() {
     trail.line.geometry.setFromPoints(trail.history);
   });
 }
-function updatePlanetLooks(elapsed) {
-  const spinMap = {
+
+function updatePlanetLooks(elapsed: number): void {
+  const spinMap: Record<string, number> = {
     Sun: 0.0027,
     Mercury: 0.0015,
     Venus: -0.00022,
@@ -670,15 +757,18 @@ function updatePlanetLooks(elapsed) {
   });
 }
 
-function updateBackground(elapsed, delta) {
+function updateBackground(elapsed: number, delta: number): void {
   if (starGroup) {
     starGroup.rotation.y += delta * 0.0015;
   }
 
   if (nebulaGroup) {
     nebulaGroup.children.forEach((mesh, index) => {
-      mesh.rotation.z += delta * (0.003 + index * 0.0004);
-      mesh.material.opacity = 0.26 + Math.sin(elapsed * (0.05 + index * 0.01)) * 0.05;
+      mesh.rotation.z += delta * (0.0015 + index * 0.0002);
+      const mat = (mesh as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      if (mat) {
+        mat.opacity = 0.07 + Math.sin(elapsed * (0.03 + index * 0.01)) * 0.015;
+      }
     });
   }
 
@@ -721,7 +811,7 @@ function updateBackground(elapsed, delta) {
       );
       sprite.position.copy(cometPosition).addScaledVector(cometDirection, distance).add(cometDrift);
       if (sprite.material) {
-        sprite.material.opacity = Math.max(0, 0.35 - spriteIndex * 0.018);
+        (sprite.material as THREE.SpriteMaterial).opacity = Math.max(0, 0.35 - spriteIndex * 0.018);
       }
     });
 
@@ -729,120 +819,136 @@ function updateBackground(elapsed, delta) {
   });
 }
 
-function resizeRenderer() {
+function resizeRenderer(): void {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.pixelRatio));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, perfManager.getConfig().maxPixelRatio));
 }
 
-function orbitCamera(deltaTheta, deltaPhi) {
-  const offset = camera.position.clone().sub(controls.target);
-  const spherical = new THREE.Spherical().setFromVector3(offset);
-  spherical.theta -= deltaTheta;
-  spherical.phi = THREE.MathUtils.clamp(spherical.phi - deltaPhi, 0.2, Math.PI - 0.2);
-  offset.setFromSpherical(spherical);
-  camera.position.copy(controls.target).add(offset);
-  camera.lookAt(controls.target);
+
+function triggerViewTransition(targetKey: "sol" | "galaxy" | "sgrA"): void {
+  const presets = getGalacticViewPresets(GALAXY_SCALE);
+  let preset;
+  if (targetKey === "sol") preset = presets.solSystem;
+  else if (targetKey === "galaxy") preset = presets.galaxyOverview;
+  else if (targetKey === "sgrA") preset = presets.sagittariusA;
+  if (!preset) return;
+
+  if (scaleController) {
+    scaleController.flyTo(targetKey, preset, 2.4);
+  }
+  if (targetInspector) {
+    targetInspector.setTarget(targetKey);
+  }
+  updateHUDViewIndicator(targetKey);
 }
 
-function zoomCamera(scaleFactor) {
-  const offset = camera.position.clone().sub(controls.target);
-  const nextLength = THREE.MathUtils.clamp(offset.length() * scaleFactor, controls.minDistance, controls.maxDistance);
-  offset.setLength(nextLength);
-  camera.position.copy(controls.target).add(offset);
+function setSpectralMode(mode: 0 | 1 | 2): void {
+  if (milkyWay) milkyWay.setSpectralMode(mode);
+  if (sagittariusA) sagittariusA.setSpectralMode(mode);
+  if (dustLanes) dustLanes.setSpectralMode(mode);
+  if (fermiBubbles) fermiBubbles.setSpectralMode(mode);
+
+  const specBtns = [
+    document.querySelector("#btn-spec-vis"),
+    document.querySelector("#btn-spec-ir"),
+    document.querySelector("#btn-spec-radio")
+  ];
+  specBtns.forEach((btn, index) => {
+    btn?.classList.toggle("active", index === mode);
+  });
 }
 
-function isOpenPalm(landmarks) {
-  const wrist = landmarks[0];
-  const thumb = landmarks[4];
-  const fingertips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
-  const avgDistance = fingertips.reduce((sum, point) => sum + Math.hypot(point.x - wrist.x, point.y - wrist.y), 0) / fingertips.length;
-  const spread = Math.hypot(thumb.x - landmarks[20].x, thumb.y - landmarks[20].y);
-  return avgDistance > 0.22 && spread > 0.22;
-}
+function updateHUDViewIndicator(targetKey: string): void {
+  const btnSol = document.querySelector("#btn-view-sol");
+  const btnGalaxy = document.querySelector("#btn-view-galaxy");
+  const btnSgrA = document.querySelector("#btn-view-sgra");
+  const sectorText = document.querySelector("#hud-sector");
 
-function updateGestureControls(now) {
-  if (!gestureState.enabled || !gestureState.handLandmarker || refs.gestureVideo.readyState < 2) {
-    return;
-  }
+  btnSol?.classList.toggle("active", targetKey === "sol");
+  btnGalaxy?.classList.toggle("active", targetKey === "galaxy");
+  btnSgrA?.classList.toggle("active", targetKey === "sgrA");
 
-  if (refs.gestureVideo.currentTime === gestureState.lastVideoTime) {
-    return;
-  }
-
-  gestureState.lastVideoTime = refs.gestureVideo.currentTime;
-  const result = gestureState.handLandmarker.detectForVideo(refs.gestureVideo, now);
-  const landmarks = result.landmarks?.[0];
-
-  if (!landmarks) {
-    gestureState.lastPinchDistance = null;
-    return;
-  }
-
-  const wrist = landmarks[0];
-  const deltaX = THREE.MathUtils.clamp(wrist.x - 0.5, -0.32, 0.32);
-  const deltaY = THREE.MathUtils.clamp(wrist.y - 0.5, -0.28, 0.28);
-
-  if (Math.abs(deltaX) > 0.03 || Math.abs(deltaY) > 0.03) {
-    orbitCamera(deltaX * 0.055, deltaY * 0.045);
-  }
-
-  const pinchDistance = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-  if (gestureState.lastPinchDistance !== null) {
-    const pinchDelta = pinchDistance - gestureState.lastPinchDistance;
-    if (Math.abs(pinchDelta) > 0.004) {
-      zoomCamera(THREE.MathUtils.clamp(1 - pinchDelta * 4.2, 0.92, 1.08));
+  if (sectorText) {
+    if (targetKey === "sol") {
+      sectorText.textContent = "SOL SYSTEM";
+    } else if (targetKey === "galaxy") {
+      sectorText.textContent = "MILKY WAY";
+    } else if (targetKey === "sgrA") {
+      sectorText.textContent = "SAGITTARIUS A*";
     }
   }
-  gestureState.lastPinchDistance = pinchDistance;
-
-  if (isOpenPalm(landmarks) && now - gestureState.lastPalmToggleAt > 1400) {
-    gestureState.lastPalmToggleAt = now;
-    simulation.set_paused(!simulation.is_paused());
-  }
 }
 
-async function enableAutoGestureMode() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    return;
-  }
+function initHUD(): void {
+  const btnSol = document.querySelector("#btn-view-sol");
+  const btnGalaxy = document.querySelector("#btn-view-galaxy");
+  const btnSgrA = document.querySelector("#btn-view-sgra");
+  const btnSpecVis = document.querySelector("#btn-spec-vis");
+  const btnSpecIr = document.querySelector("#btn-spec-ir");
+  const btnSpecRadio = document.querySelector("#btn-spec-radio");
 
-  try {
-    if (!gestureState.FilesetResolver || !gestureState.HandLandmarker) {
-      const tasksVision = await import("@mediapipe/tasks-vision");
-      gestureState.FilesetResolver = tasksVision.FilesetResolver;
-      gestureState.HandLandmarker = tasksVision.HandLandmarker;
-    }
+  btnSol?.addEventListener("click", () => triggerViewTransition("sol"));
+  btnGalaxy?.addEventListener("click", () => triggerViewTransition("galaxy"));
+  btnSgrA?.addEventListener("click", () => triggerViewTransition("sgrA"));
 
-    gestureState.vision = await gestureState.FilesetResolver.forVisionTasks(GESTURE_WASM_BASE);
-    gestureState.handLandmarker = await gestureState.HandLandmarker.createFromOptions(gestureState.vision, {
-      baseOptions: { modelAssetPath: HAND_MODEL_URL },
-      runningMode: "VIDEO",
-      numHands: 1
-    });
-
-    gestureState.stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480, facingMode: "user" }
-    });
-
-    refs.gestureVideo.srcObject = gestureState.stream;
-    await refs.gestureVideo.play();
-    gestureState.enabled = true;
-  } catch (error) {
-    console.warn("Automatic camera access was not granted.", error);
-  }
+  btnSpecVis?.addEventListener("click", () => setSpectralMode(0));
+  btnSpecIr?.addEventListener("click", () => setSpectralMode(1));
+  btnSpecRadio?.addEventListener("click", () => setSpectralMode(2));
 }
 
-function wireEvents() {
+function wireEvents(): void {
   window.addEventListener("resize", resizeRenderer);
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "1") triggerViewTransition("sol");
+    if (e.key === "2") triggerViewTransition("galaxy");
+    if (e.key === "3") triggerViewTransition("sgrA");
+    if (e.key === "v" || e.key === "V") setSpectralMode(0);
+    if (e.key === "i" || e.key === "I") setSpectralMode(1);
+    if (e.key === "r" || e.key === "R") setSpectralMode(2);
+    if (e.key === "p" || e.key === "P") {
+      const current = perfManager.getTier();
+      const nextTier = current === "HIGH" ? "MEDIUM" : current === "MEDIUM" ? "LOW" : "HIGH";
+      perfManager.setTier(nextTier);
+    }
+  });
 }
 
-async function start() {
+async function start(): Promise<void> {
   await init();
   simulation = new GravitySimulation();
-  metadata = simulation.get_body_metadata();
+  metadata = simulation.get_body_metadata() as BodyMetadata[];
   const initialPositions = Array.from(simulation.get_positions());
+
+  const perfConfig = perfManager.getConfig();
+
+  // Phase 1 & Phase 5: Procedural Milky Way Galaxy (Adaptive particle density via PerformanceManager)
+  milkyWay = createMilkyWayStars({ starCount: perfConfig.starCount, scaleFactor: GALAXY_SCALE });
+  scene.add(milkyWay.mesh);
+
+  perfManager.onTierChange = (_tier, config) => {
+    if (milkyWay) {
+      milkyWay.setDrawCount(config.starCount);
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.maxPixelRatio));
+  };
+
+  // Phase 1: Solar System Galactic Anchor & Beacon
+  solarAnchor = createSolarAnchor(GALAXY_SCALE);
+  scene.add(solarAnchor.group);
+
+  // Phase 3: Sagittarius A* Supermassive Black Hole & Relativistic Accretion Disk
+  sagittariusA = createSagittariusACore({ radius: 3.2, diskInnerRadius: 7.5, diskOuterRadius: 28.0 });
+  scene.add(sagittariusA.group);
+
+  // Phase 3: Interstellar Dust Absorption Lanes & H II Nebulae
+  dustLanes = createInterstellarDustLanes({ scaleFactor: GALAXY_SCALE });
+  scene.add(dustLanes.group);
+
+  // Phase 3: Fermi Gamma-Ray Lobes
+  fermiBubbles = createFermiBubbles({ scaleFactor: GALAXY_SCALE });
+  scene.add(fermiBubbles.group);
 
   createNebulaField();
   createStarField();
@@ -852,23 +958,97 @@ async function start() {
   createComets();
   updateBodyPositions(initialPositions);
   buildFocus();
+
+  // Phase 2: Dual-Scale Camera Rig & Spatial Transition Engine
+  scaleController = new ScaleController(
+    camera,
+    controls,
+    solarSystemGroup,
+    solarAnchor,
+    (scaleState) => {
+      const scaleText = document.querySelector("#hud-scale");
+      if (scaleText) {
+        scaleText.textContent = `SCALE: ${scaleState.formattedScaleUnit} | DIST: ${scaleState.formattedDistance} | LOG-DEPTH ACTIVE`;
+      }
+    }
+  );
+
+  // Phase 4: Scientific HUD & Telemetry Layer
+  const radarCanvas = document.querySelector("#galactic-radar-canvas") as HTMLCanvasElement | null;
+  if (radarCanvas) {
+    galacticRadar = new GalacticRadar({
+      canvas: radarCanvas,
+      scaleFactor: GALAXY_SCALE,
+      onRadarClick: (coords: { x: number; z: number }) => {
+        controls.target.set(coords.x, 0, coords.z);
+      }
+    });
+  }
+
+  const scaleBarContainer = document.querySelector(".log-scale-bar-container") as HTMLElement | null;
+  if (scaleBarContainer) {
+    logScaleBar = new LogarithmicScaleBar({ containerElement: scaleBarContainer });
+  }
+
+  const inspectorCard = document.querySelector(".target-inspector-card") as HTMLElement | null;
+  if (inspectorCard) {
+    targetInspector = new TargetInspector(inspectorCard);
+    targetInspector.setTarget("sol");
+  }
+
   wireEvents();
-  await enableAutoGestureMode();
+  initHUD();
 
   const clock = new THREE.Clock();
+  let perfFrameCounter = 0;
 
-  function frame(now) {
+  function frame(now: number): void {
     const delta = Math.min(clock.getDelta(), 0.05);
     const elapsed = clock.elapsedTime;
 
+    let isMacro = false;
+    if (scaleController) {
+      const scaleState = scaleController.update(now);
+      isMacro = scaleState.level === "GALACTIC_MACRO";
+    }
+
+    // Performance Optimization: Macro-distance Planetary Culling
+    // When zoomed out to galactic macro scale, the Solar System occupies < 0.5% viewport width.
+    // The solar anchor beacon clearly indicates Sol's location. Culling planetary bodies, orbits,
+    // and trails saves ~20 draw calls and eliminates per-frame buffer updates.
+    solarSystemGroup.visible = !isMacro;
+
     simulation.update(delta, 1);
-    updateBodyPositions(simulation.get_positions());
-    updateTrails();
-    updatePlanetLooks(elapsed);
-    updateBackground(elapsed, delta);
-    updateGestureControls(now);
+    if (!isMacro) {
+      updateBodyPositions(simulation.get_positions());
+      updateTrails();
+      updatePlanetLooks(elapsed);
+      updateBackground(elapsed, delta);
+    }
+
+    if (milkyWay) milkyWay.update(elapsed);
+    if (solarAnchor) solarAnchor.update(elapsed);
+    if (sagittariusA) sagittariusA.update(elapsed, camera.position);
+    if (dustLanes) dustLanes.update(elapsed);
+    if (fermiBubbles) fermiBubbles.update(elapsed, camera.position);
+    if (galacticRadar) galacticRadar.render(camera, controls.target, elapsed);
+    if (logScaleBar) {
+      const distSun = camera.position.distanceTo(solarSystemGroup.position);
+      const distCenter = camera.position.length();
+      logScaleBar.update(distSun, distCenter);
+    }
     controls.update();
     renderer.render(scene, camera);
+
+    // Performance telemetry recording & HUD status readout (throttled to avoid DOM thrashing)
+    const metrics = perfManager.recordFrame(renderer.info);
+    if (perfFrameCounter++ % 15 === 0) {
+      const perfElement = document.querySelector("#hud-perf");
+      if (perfElement) {
+        perfElement.textContent = `FPS: ${metrics.fps} (${metrics.frameTimeMs}ms) | CALLS: ${metrics.drawCalls} | TIER: ${metrics.tier}`;
+      }
+    }
+
     requestAnimationFrame(frame);
   }
 
@@ -878,4 +1058,3 @@ async function start() {
 start().catch((error) => {
   console.error(error);
 });
-
