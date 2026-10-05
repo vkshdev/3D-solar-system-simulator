@@ -16,10 +16,7 @@ import { ScaleController } from "./camera/index.ts";
 import { GalacticRadar, LogarithmicScaleBar, TargetInspector } from "./ui/index.ts";
 import { PerformanceManager } from "./performance/index.ts";
 
-// Initialize Vercel Web Analytics
 inject();
-
-// Initialize Vercel Speed Insights
 injectSpeedInsights();
 
 export interface BodyMetadata {
@@ -74,7 +71,7 @@ export interface PlanetProfile {
 }
 
 const DISTANCE_SCALE = 1.18;
-const GALAXY_SCALE = 50.0; // 1 kpc = 50 world units
+const GALAXY_SCALE = 50.0;
 const QUALITY = { starCount: 3600, trailLength: 190, trailStep: 3, pixelRatio: 1.8 };
 
 const perfManager = new PerformanceManager();
@@ -99,7 +96,6 @@ renderer.setClearColor("#010308");
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2("#03060d", 0.00015);
 
-// Solar System Galactocentric Anchor position: [0.0, 0.02, 8.20] kpc * 50 = [0, 1, 410]
 const solarGalacticPos = new THREE.Vector3(
   GALACTIC_CONSTANTS.SOLAR_POSITION.x * GALAXY_SCALE,
   GALACTIC_CONSTANTS.SOLAR_POSITION.y * GALAXY_SCALE,
@@ -923,7 +919,6 @@ async function start(): Promise<void> {
 
   const perfConfig = perfManager.getConfig();
 
-  // Phase 1 & Phase 5: Procedural Milky Way Galaxy (Adaptive particle density via PerformanceManager)
   milkyWay = createMilkyWayStars({ starCount: perfConfig.starCount, scaleFactor: GALAXY_SCALE });
   scene.add(milkyWay.mesh);
 
@@ -934,19 +929,15 @@ async function start(): Promise<void> {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.maxPixelRatio));
   };
 
-  // Phase 1: Solar System Galactic Anchor & Beacon
   solarAnchor = createSolarAnchor(GALAXY_SCALE);
   scene.add(solarAnchor.group);
 
-  // Phase 3: Sagittarius A* Supermassive Black Hole & Relativistic Accretion Disk
   sagittariusA = createSagittariusACore({ radius: 3.2, diskInnerRadius: 7.5, diskOuterRadius: 28.0 });
   scene.add(sagittariusA.group);
 
-  // Phase 3: Interstellar Dust Absorption Lanes & H II Nebulae
   dustLanes = createInterstellarDustLanes({ scaleFactor: GALAXY_SCALE });
   scene.add(dustLanes.group);
 
-  // Phase 3: Fermi Gamma-Ray Lobes
   fermiBubbles = createFermiBubbles({ scaleFactor: GALAXY_SCALE });
   scene.add(fermiBubbles.group);
 
@@ -959,7 +950,6 @@ async function start(): Promise<void> {
   updateBodyPositions(initialPositions);
   buildFocus();
 
-  // Phase 2: Dual-Scale Camera Rig & Spatial Transition Engine
   scaleController = new ScaleController(
     camera,
     controls,
@@ -973,7 +963,6 @@ async function start(): Promise<void> {
     }
   );
 
-  // Phase 4: Scientific HUD & Telemetry Layer
   const radarCanvas = document.querySelector("#galactic-radar-canvas") as HTMLCanvasElement | null;
   if (radarCanvas) {
     galacticRadar = new GalacticRadar({
@@ -1012,10 +1001,6 @@ async function start(): Promise<void> {
       isMacro = scaleState.level === "GALACTIC_MACRO";
     }
 
-    // Performance Optimization: Macro-distance Planetary Culling
-    // When zoomed out to galactic macro scale, the Solar System occupies < 0.5% viewport width.
-    // The solar anchor beacon clearly indicates Sol's location. Culling planetary bodies, orbits,
-    // and trails saves ~20 draw calls and eliminates per-frame buffer updates.
     solarSystemGroup.visible = !isMacro;
 
     simulation.update(delta, 1);
@@ -1040,7 +1025,6 @@ async function start(): Promise<void> {
     controls.update();
     renderer.render(scene, camera);
 
-    // Performance telemetry recording & HUD status readout (throttled to avoid DOM thrashing)
     const metrics = perfManager.recordFrame(renderer.info);
     if (perfFrameCounter++ % 15 === 0) {
       const perfElement = document.querySelector("#hud-perf");

@@ -1,7 +1,7 @@
 {
   "name": "rust-physics",
   "type": "module",
-  "description": "Normalized solar system physics for the browser",
+  "description": "High-performance orbital and celestial physics for Milky Way Galaxy Simulator",
   "version": "0.2.0",
   "license": "MIT",
   "files": [

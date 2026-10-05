@@ -2,7 +2,7 @@
 name = "rust-physics"
 version = "0.2.0"
 edition = "2021"
-description = "Normalized solar system physics for the browser"
+description = "High-performance orbital and celestial physics for Milky Way Galaxy Simulator"
 license = "MIT"
 
 [lib]
