@@ -1,19 +1,155 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Solar System Simulator</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2728%27 fill=%27%23f7a938%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2712%27 fill=%27%23fff1bf%27/%3E%3C/svg%3E" />
+    
+    <!-- Primary SEO Meta Tags -->
+    <title>Milky Way Galaxy Simulator | Interactive Space Exploration</title>
+    <meta name="title" content="Milky Way Galaxy Simulator | Interactive Space Exploration" />
+    <meta name="description" content="Explore the Milky Way Galaxy in real-time 3D. Features 150,000 dynamically rendered stars, Sagittarius A* supermassive black hole, Lin-Shu density wave spiral arms, and N-body planetary physics." />
+    <meta name="keywords" content="Milky Way Galaxy Simulator, 3D space simulator, Milky Way simulation, Three.js galaxy, Sagittarius A black hole, interactive astronomy, WebGL galaxy, space exploration, orbital mechanics" />
+    <meta name="author" content="vkshdev" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://vkshdev.github.io/Milky-Way/" />
+
+    <!-- Open Graph / Facebook / LinkedIn / Discord -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vkshdev.github.io/Milky-Way/" />
+    <meta property="og:title" content="Milky Way Galaxy Simulator" />
+    <meta property="og:description" content="Interactive real-time 3D simulation of the Milky Way Galaxy with 150,000 stars, Sagittarius A* relativistic accretion, and multi-scale astronomical flight." />
+    <meta property="og:image" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
+    <meta property="og:image:secure_url" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="Milky Way Galaxy Simulator preview screenshot" />
+    <meta property="og:site_name" content="Milky Way Galaxy Simulator" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://vkshdev.github.io/Milky-Way/" />
+    <meta name="twitter:title" content="Milky Way Galaxy Simulator" />
+    <meta name="twitter:description" content="Explore the Milky Way Galaxy in interactive 3D with relativistic black hole physics, 150,000 stars, and multi-spectral astrophysics." />
+    <meta name="twitter:image" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
+    <meta name="twitter:image:alt" content="Milky Way Galaxy Simulator preview screenshot" />
+
+    <!-- PWA & Mobile Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#02050c" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Milky Way" />
+
+    <!-- Google Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Milky Way Galaxy Simulator",
+      "url": "https://vkshdev.github.io/Milky-Way/",
+      "description": "Interactive real-time 3D simulation of the Milky Way Galaxy with N-body physics, Sagittarius A* relativistic accretion, and multi-scale camera flight.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "All",
+      "browserRequirements": "Requires WebGL support",
+      "image": "https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png",
+      "author": {
+        "@type": "Person",
+        "name": "vkshdev",
+        "url": "https://github.com/vkshdev"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+
+    <!-- Typography & Stylesheets -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/ui/telemetry.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <!-- Semantic crawlable content for search engine indexers and screen readers -->
+    <main class="sr-only">
+      <h1>Milky Way Galaxy Simulator</h1>
+      <p>
+        An interactive, scientific real-time 3D space simulation built with WebGL, Three.js,
+        and Rust WebAssembly physics.
+      </p>
+      <section>
+        <h2>Solar System Exploration</h2>
+        <p>
+          Simulate accurate orbital mechanics and scale models of the Sun, Mercury, Venus, Earth and Moon,
+          Mars, Jupiter, Saturn with ring systems, Uranus, Neptune, and realistic comets.
+        </p>
+      </section>
+      <section>
+        <h2>Milky Way Galaxy &amp; Supermassive Black Hole</h2>
+        <p>
+          Journey through 100,000 light-years of our galaxy featuring 150,000 dynamically rendered stars,
+          logarithmic spiral arms (Perseus, Scutum-Centaurus, Sagittarius, Outer), interstellar dust lanes,
+          bipolar Fermi gamma-ray bubbles, and Sagittarius A* relativistic Kerr black hole accretion disk with gravitational lensing.
+        </p>
+      </section>
+      <section>
+        <h2>Controls &amp; Hotkeys</h2>
+        <ul>
+          <li>Key 1: Sol Planetary System Focus</li>
+          <li>Key 2: Milky Way Galactic Overview</li>
+          <li>Key 3: Sagittarius A* Galactic Core Focus</li>
+          <li>Key V: Visible Spectrum</li>
+          <li>Key I: Infrared Spectrum</li>
+          <li>Key R: Radio Spectrum</li>
+          <li>Key P: Performance Tier Cycle (High, Medium, Low)</li>
+        </ul>
+      </section>
+    </main>
+
+    <div class="app-shell" aria-hidden="false">
       <canvas id="scene"></canvas>
-      <video id="gesture-video" playsinline muted></video>
+
+      <!-- 1. Top-Right Galactic Radar Minimap Card -->
+      <aside class="hud-panel galactic-radar-container" aria-label="Galactic Radar Minimap">
+        <div class="radar-header">
+          <span>GALACTIC RADAR</span>
+        </div>
+        <canvas id="galactic-radar-canvas" width="170" height="170"></canvas>
+      </aside>
+
+      <!-- 2. Bottom-Right Navigation Bar (Short and Simple) -->
+      <nav class="hud-panel telemetry-nav-bottom" aria-label="Navigation Controls">
+        <div class="telemetry-status-badge">
+          <span class="telemetry-pulse-dot" aria-hidden="true"></span>
+          <span id="hud-sector">SOL SYSTEM</span>
+        </div>
+        <div class="telemetry-btn-group">
+          <button class="telemetry-btn active" id="btn-view-sol" title="Hotkey: 1">Sol</button>
+          <button class="telemetry-btn" id="btn-view-galaxy" title="Hotkey: 2">Milky Way</button>
+          <button class="telemetry-btn" id="btn-view-sgra" title="Hotkey: 3">Sgr A*</button>
+        </div>
+        <div class="telemetry-btn-group">
+          <button class="telemetry-btn telemetry-btn-small active" id="btn-spec-vis" title="Visible (Key V)">VIS</button>
+          <button class="telemetry-btn telemetry-btn-small" id="btn-spec-ir" title="Infrared (Key I)">IR</button>
+          <button class="telemetry-btn telemetry-btn-small" id="btn-spec-radio" title="Radio (Key R)">RADIO</button>
+        </div>
+      </nav>
+
+      <!-- 3. Bottom-Left Telemetry HUD Status Footer -->
+      <footer class="hud-panel telemetry-footer-status" aria-label="Real-time Telemetry">
+        <span id="hud-scale">SCALE: SOLAR SYSTEM (AU) | LOG-DEPTH ACTIVE</span>
+        <span class="telemetry-separator">|</span>
+        <span id="hud-perf">FPS: -- | --ms | CALLS: -- | TIER: HIGH</span>
+      </footer>
     </div>
 
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-
