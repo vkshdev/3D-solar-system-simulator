@@ -1,0 +1,184 @@
+/* Telemetry and Aerospace HUD Styling - Paper White and Gray Aesthetic */
+
+:root {
+  --hud-bg: rgba(12, 14, 20, 0.45);
+  --hud-bg-hover: rgba(255, 255, 255, 0.14);
+  --hud-border: rgba(255, 255, 255, 0.20);
+  --hud-border-active: #ffffff;
+  --hud-white: #f4f4f6;
+  --hud-white-bright: #ffffff;
+  --hud-white-glow: rgba(255, 255, 255, 0.35);
+  --hud-gray: #a1a1aa;
+  --hud-gray-dark: #71717a;
+  --hud-amber: #f4f4f6;
+  --hud-amber-bright: #ffffff;
+  --hud-amber-glow: rgba(255, 255, 255, 0.35);
+  --hud-lime: #f4f4f6;
+  --hud-cyan: #f4f4f6;
+  --hud-magenta: #d4d4d8;
+  --hud-text: #f4f4f6;
+  --hud-text-dim: #a1a1aa;
+  --hud-font: "Share Tech Mono", "Space Mono", "JetBrains Mono", Consolas, monospace;
+}
+
+.hud-panel {
+  background: var(--hud-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 0 16px rgba(255, 255, 255, 0.04);
+  font-family: var(--hud-font);
+  color: var(--hud-text);
+  text-shadow: none;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.telemetry-nav-top,
+.telemetry-nav-bottom {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  font-size: 11px;
+  z-index: 100;
+}
+
+.telemetry-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  color: var(--hud-white-bright);
+}
+
+.telemetry-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-white);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  animation: telemetry-pulse 2s infinite ease-in-out;
+}
+
+@keyframes telemetry-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 14px rgba(255, 255, 255, 0.95); }
+}
+
+.telemetry-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.telemetry-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--hud-text);
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.telemetry-btn:hover {
+  background: var(--hud-bg-hover);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+}
+
+.telemetry-btn.active {
+  background: rgba(255, 255, 255, 0.20);
+  border-color: var(--hud-white-bright);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
+}
+
+.telemetry-btn-small {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.galactic-radar-container {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 190px;
+  padding: 10px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radar-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  color: var(--hud-white);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  padding-bottom: 4px;
+}
+
+#galactic-radar-canvas {
+  width: 170px;
+  height: 170px;
+  border-radius: 4px;
+  background: rgba(8, 10, 14, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: crosshair;
+}
+
+.telemetry-footer-status {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--hud-text);
+  pointer-events: none;
+  z-index: 90;
+  white-space: nowrap;
+}
+
+.telemetry-separator {
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 300;
+}
+
+#hud-perf {
+  color: var(--hud-white-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .galactic-radar-container {
+    display: none;
+  }
+  .telemetry-nav-top,
+  .telemetry-nav-bottom {
+    font-size: 10px;
+    gap: 6px;
+    padding: 5px 8px;
+    bottom: 8px;
+    right: 8px;
+  }
+  .telemetry-footer-status {
+    display: none;
+  }
+}

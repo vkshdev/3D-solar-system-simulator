@@ -1,0 +1,28 @@
+{
+  "name": "Milky Way Galaxy Simulator",
+  "short_name": "Milky Way",
+  "description": "Interactive real-time 3D simulation of the Milky Way Galaxy with N-body physics, Sagittarius A* relativistic accretion, and multi-scale camera flight.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#02050c",
+  "theme_color": "#02050c",
+  "orientation": "any",
+  "categories": [
+    "education",
+    "simulation",
+    "science"
+  ],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/screenshot/shot_1.png",
+      "sizes": "1280x720",
+      "type": "image/png"
+    }
+  ]
+}

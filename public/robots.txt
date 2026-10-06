@@ -1,0 +1,6 @@
+# Robots.txt for Milky Way Galaxy Simulator
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://vkshdev.github.io/Milky-Way/sitemap.xml
