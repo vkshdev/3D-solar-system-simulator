@@ -1,7 +1,6 @@
 node_modules/
 dist/
 .vite/
-.vercel/
 
 rust-physics/target/
 target/
