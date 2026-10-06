@@ -16,28 +16,28 @@
     <!-- Open Graph / Facebook / LinkedIn / Discord -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://vkshdev.github.io/Milky-Way/" />
-    <meta property="og:title" content="Milky Way Galaxy Simulator" />
-    <meta property="og:description" content="Interactive real-time 3D simulation of the Milky Way Galaxy with 150,000 stars, Sagittarius A* relativistic accretion, and multi-scale astronomical flight." />
+    <meta property="og:title" content="Milky Way Galaxy Simulator | Interactive Space Exploration" />
+    <meta property="og:description" content="Interactive real-time 3D simulation of our Milky Way Galaxy and Solar System with 150,000 stars, Sagittarius A* relativistic accretion, and multi-scale astronomical flight." />
     <meta property="og:image" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
     <meta property="og:image:secure_url" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="720" />
-    <meta property="og:image:alt" content="Milky Way Galaxy Simulator preview screenshot" />
+    <meta property="og:image:alt" content="Milky Way Galaxy Simulator 3D real-time space visualization" />
     <meta property="og:site_name" content="Milky Way Galaxy Simulator" />
     <meta property="og:locale" content="en_US" />
 
     <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://vkshdev.github.io/Milky-Way/" />
-    <meta name="twitter:title" content="Milky Way Galaxy Simulator" />
-    <meta name="twitter:description" content="Explore the Milky Way Galaxy in interactive 3D with relativistic black hole physics, 150,000 stars, and multi-spectral astrophysics." />
+    <meta name="twitter:title" content="Milky Way Galaxy Simulator | Interactive Space Exploration" />
+    <meta name="twitter:description" content="Explore the Milky Way Galaxy and Solar System in interactive 3D with relativistic black hole physics, 150,000 stars, and multi-spectral astrophysics." />
     <meta name="twitter:image" content="https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png" />
-    <meta name="twitter:image:alt" content="Milky Way Galaxy Simulator preview screenshot" />
+    <meta name="twitter:image:alt" content="Milky Way Galaxy Simulator 3D preview screenshot" />
 
     <!-- PWA & Mobile Icons -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#02050c" />
     <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -48,24 +48,45 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "Milky Way Galaxy Simulator",
-      "url": "https://vkshdev.github.io/Milky-Way/",
-      "description": "Interactive real-time 3D simulation of the Milky Way Galaxy with N-body physics, Sagittarius A* relativistic accretion, and multi-scale camera flight.",
-      "applicationCategory": "EducationalApplication",
-      "operatingSystem": "All",
-      "browserRequirements": "Requires WebGL support",
-      "image": "https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png",
-      "author": {
-        "@type": "Person",
-        "name": "vkshdev",
-        "url": "https://github.com/vkshdev"
-      },
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "@id": "https://vkshdev.github.io/Milky-Way/#webapp",
+          "name": "Milky Way Galaxy Simulator",
+          "alternateName": "3D Milky Way & Solar System Simulator",
+          "url": "https://vkshdev.github.io/Milky-Way/",
+          "description": "Interactive real-time 3D simulation of the Milky Way Galaxy and Solar System with N-body physics, Sagittarius A* relativistic accretion, and multi-scale camera flight.",
+          "applicationCategory": "EducationalApplication, Simulation",
+          "genre": "Astrophysics, Space Simulation",
+          "operatingSystem": "All",
+          "browserRequirements": "Requires WebGL 2.0 / WebAssembly support",
+          "image": "https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png",
+          "screenshot": "https://vkshdev.github.io/Milky-Way/screenshot/shot_1.png",
+          "author": {
+            "@type": "Person",
+            "name": "vkshdev",
+            "url": "https://github.com/vkshdev"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://vkshdev.github.io/Milky-Way/#website",
+          "url": "https://vkshdev.github.io/Milky-Way/",
+          "name": "Milky Way Galaxy Simulator",
+          "description": "Interactive 3D real-time space exploration of the Milky Way Galaxy and Solar System.",
+          "publisher": {
+            "@type": "Person",
+            "name": "vkshdev",
+            "url": "https://github.com/vkshdev"
+          },
+          "inLanguage": "en-US"
+        }
+      ]
     }
     </script>
 
@@ -141,9 +162,9 @@
       </nav>
 
       <footer class="hud-panel telemetry-footer-status" aria-label="Real-time Telemetry">
-        <span id="hud-scale">SCALE: SOLAR SYSTEM (AU) | LOG-DEPTH ACTIVE</span>
+        <span id="hud-scale">SCALE: SOLAR SYSTEM (AU)</span>
         <span class="telemetry-separator">|</span>
-        <span id="hud-perf">FPS: -- | --ms | CALLS: -- | TIER: HIGH</span>
+        <span id="hud-perf">TIER: HIGH</span>
       </footer>
     </div>
 

@@ -10,8 +10,6 @@
     "wasm:release": "wasm-pack build rust-physics --target web --release --out-dir pkg"
   },
   "dependencies": {
-    "@vercel/analytics": "^2.0.1",
-    "@vercel/speed-insights": "^2.0.0",
     "three": "^0.178.0"
   },
   "devDependencies": {
