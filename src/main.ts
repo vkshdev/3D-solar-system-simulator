@@ -1,8 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import init, { GravitySimulation } from "../rust-physics/pkg/rust_physics.js";
-import { inject } from "@vercel/analytics";
-import { injectSpeedInsights } from "@vercel/speed-insights";
 import {
   createMilkyWayStars,
   createSolarAnchor,
@@ -15,9 +13,6 @@ import { createSagittariusACore } from "./shaders/index.ts";
 import { ScaleController } from "./camera/index.ts";
 import { GalacticRadar, LogarithmicScaleBar, TargetInspector } from "./ui/index.ts";
 import { PerformanceManager } from "./performance/index.ts";
-
-inject();
-injectSpeedInsights();
 
 export interface BodyMetadata {
   name: string;
@@ -36,13 +31,11 @@ export interface BodyVisualEntry {
   glow: THREE.Mesh;
   material: THREE.MeshStandardMaterial;
   atmosphere?: THREE.Mesh | null;
-  haloInner?: THREE.Sprite;
-  haloOuter?: THREE.Sprite;
-  corona?: THREE.Mesh;
   ring?: THREE.Mesh;
 }
 
 export interface TrailEntry {
+  body: BodyVisualEntry;
   line: THREE.Line;
   history: THREE.Vector3[];
   maxPoints: number;
@@ -119,7 +112,7 @@ controls.target.copy(solarGalacticPos);
 
 const ambientLight = new THREE.AmbientLight("#80a4ff", 0.22);
 const hemisphereLight = new THREE.HemisphereLight("#6e90ff", "#050a12", 0.42);
-const sunLight = new THREE.PointLight("#ffd089", 4.1, 2200, 1.35);
+const sunLight = new THREE.PointLight("#fff5e4", 4.1, 2200, 1.35);
 scene.add(ambientLight, hemisphereLight);
 solarSystemGroup.add(sunLight);
 
@@ -133,6 +126,8 @@ let cometEntries: CometEntry[] = [];
 let gravityFieldGroup: THREE.Group | undefined;
 let orbitGuideGroup: THREE.Group | undefined;
 let moonGuide: THREE.LineLoop | undefined;
+let moonOrbitRadius = 3.3;
+let moonOrbitInclination = 0.16;
 let trailFrameCounter = 0;
 let milkyWay: ReturnType<typeof createMilkyWayStars> | null = null;
 let solarAnchor: ReturnType<typeof createSolarAnchor> | null = null;
@@ -330,34 +325,79 @@ function createVenusTexture(): THREE.CanvasTexture {
 
 function createSunTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = createSurfaceCanvas();
-  const radial = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, 8, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.54);
-  radial.addColorStop(0, "#fff4b3");
-  radial.addColorStop(0.28, "#ffd15e");
-  radial.addColorStop(0.62, "#ff8e2d");
-  radial.addColorStop(0.9, "#cc4b11");
-  radial.addColorStop(1, "#4f1205");
-  ctx.fillStyle = radial;
+
+  const baseGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  baseGrad.addColorStop(0, "#4a2408");
+  baseGrad.addColorStop(0.18, "#7d3f12");
+  baseGrad.addColorStop(0.38, "#c88228");
+  baseGrad.addColorStop(0.5, "#f7bc48");
+  baseGrad.addColorStop(0.62, "#c88228");
+  baseGrad.addColorStop(0.82, "#7d3f12");
+  baseGrad.addColorStop(1, "#4a2408");
+  ctx.fillStyle = baseGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < 340; i += 1) {
+  for (let i = 0; i < 480; i += 1) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const rx = 14 + Math.random() * 56;
-    const ry = 8 + Math.random() * 28;
+    const rx = 10 + Math.random() * 42;
+    const ry = 6 + Math.random() * 24;
+    const roll = Math.random();
+
     ctx.beginPath();
-    ctx.fillStyle = `rgba(255, ${150 + Math.random() * 70}, ${20 + Math.random() * 40}, ${0.04 + Math.random() * 0.14})`;
+    if (roll > 0.65) {
+      ctx.fillStyle = `rgba(255, 248, 224, ${0.2 + Math.random() * 0.2})`;
+    } else if (roll > 0.3) {
+      ctx.fillStyle = `rgba(242, 172, 60, ${0.16 + Math.random() * 0.18})`;
+    } else {
+      ctx.fillStyle = `rgba(95, 42, 10, ${0.22 + Math.random() * 0.22})`;
+    }
     ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 140; i += 1) {
+    const x = Math.random() * canvas.width;
+    const y = (0.2 + Math.random() * 0.6) * canvas.height;
+    const rx = 18 + Math.random() * 65;
+    const ry = 4 + Math.random() * 14;
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255, 252, 238, ${0.18 + Math.random() * 0.2})`;
+    ctx.ellipse(x, y, rx, ry, (Math.random() - 0.5) * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const spotCount = 14;
+  for (let s = 0; s < spotCount; s += 1) {
+    const cx = (s / spotCount) * canvas.width + (Math.random() - 0.5) * 60;
+    const cy = (0.32 + (s % 2 === 0 ? 0.12 : 0.28) + (Math.random() - 0.5) * 0.1) * canvas.height;
+    const size = 12 + Math.random() * 22;
+
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(115, 52, 14, 0.76)";
+    ctx.ellipse(cx, cy, size, size * 0.65, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(42, 16, 4, 0.94)";
+    ctx.ellipse(cx, cy, size * 0.45, size * 0.32, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 240, 190, 0.4)";
+    ctx.lineWidth = 1.6;
+    ctx.ellipse(cx, cy, size * 1.15, size * 0.78, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 90; i += 1) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    ctx.strokeStyle = `rgba(255, ${190 + Math.random() * 40}, 100, ${0.08 + Math.random() * 0.08})`;
-    ctx.lineWidth = 2 + Math.random() * 3;
+    ctx.strokeStyle = `rgba(255, ${225 + Math.random() * 25}, ${160 + Math.random() * 50}, ${0.12 + Math.random() * 0.14})`;
+    ctx.lineWidth = 1.5 + Math.random() * 2.5;
     ctx.beginPath();
-    ctx.moveTo(x - 18, y - 8);
-    ctx.bezierCurveTo(x + 12, y - 24, x + 28, y + 12, x + 46, y + 6);
+    ctx.moveTo(x - 22, y - 8);
+    ctx.bezierCurveTo(x + 10, y - 22, x + 30, y + 14, x + 50, y + 4);
     ctx.stroke();
   }
 
@@ -394,16 +434,10 @@ function getPlanetProfile(bodyMeta: BodyMetadata): PlanetProfile {
     case "Sun":
       return {
         map: createSunTexture(),
-        roughness: 0.34,
-        emissiveIntensity: 2.1,
-        glowOpacity: 0.24,
-        atmosphereOpacity: 0,
-        haloTexture: createRadialTexture([
-          { offset: 0, color: "rgba(255, 245, 180, 0.95)" },
-          { offset: 0.24, color: "rgba(255, 196, 92, 0.45)" },
-          { offset: 0.72, color: "rgba(255, 118, 22, 0.12)" },
-          { offset: 1, color: "rgba(255, 118, 22, 0)" }
-        ])
+        roughness: 0.42,
+        emissiveIntensity: 0.32,
+        glowOpacity: 0.06,
+        atmosphereOpacity: 0
       };
     case "Mercury":
       return { map: createRockyTexture("#8e7f73", "#b19a89", "#4a3e38", "#78685f"), roughness: 0.98, emissiveIntensity: 0.02, glowOpacity: 0.02, atmosphereOpacity: 0 };
@@ -527,16 +561,29 @@ function createOrbitPath(radius: number, color: string | THREE.Color, inclinatio
   return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.24 }));
 }
 
+function getMoonOffset(radius: number, inclination: number, angle: number): THREE.Vector3 {
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius;
+  const y = z * Math.sin(inclination) * 0.35;
+  return new THREE.Vector3(x, y, z * Math.cos(inclination * 0.4));
+}
+
 function createBodyVisual(bodyMeta: BodyMetadata, index: number): BodyVisualEntry {
   const root = new THREE.Group();
   root.userData.bodyIndex = index;
 
   const profile = getPlanetProfile(bodyMeta);
+  const isSun = bodyMeta.is_sun || bodyMeta.name === "Sun";
+  const bodyColor = isSun ? "#ffffff" : bodyMeta.color;
+  const emissiveColor = isSun ? "#d48b28" : bodyMeta.glow_color;
+  const glowColor = isSun ? "#b86f1e" : bodyMeta.glow_color;
+
   const material = new THREE.MeshStandardMaterial({
     map: profile.map,
-    color: bodyMeta.color,
-    emissive: hexColor(bodyMeta.glow_color),
+    color: hexColor(bodyColor),
+    emissive: hexColor(emissiveColor),
     emissiveIntensity: profile.emissiveIntensity,
+    emissiveMap: isSun ? profile.map : null,
     roughness: profile.roughness,
     metalness: 0.01
   });
@@ -544,8 +591,8 @@ function createBodyVisual(bodyMeta: BodyMetadata, index: number): BodyVisualEntr
   root.add(mesh);
 
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(bodyMeta.radius * (bodyMeta.is_sun ? 3.15 : 1.08), 34, 34),
-    new THREE.MeshBasicMaterial({ color: bodyMeta.glow_color, transparent: true, opacity: profile.glowOpacity, depthWrite: false })
+    new THREE.SphereGeometry(bodyMeta.radius * 1.08, 34, 34),
+    new THREE.MeshBasicMaterial({ color: hexColor(glowColor), transparent: true, opacity: profile.glowOpacity, depthWrite: false })
   );
   root.add(glow);
 
@@ -558,22 +605,7 @@ function createBodyVisual(bodyMeta: BodyMetadata, index: number): BodyVisualEntr
     root.add(atmosphere);
   }
 
-  let haloInner: THREE.Sprite | undefined;
-  let haloOuter: THREE.Sprite | undefined;
-  let corona: THREE.Mesh | undefined;
   let ring: THREE.Mesh | undefined;
-
-  if (bodyMeta.is_sun) {
-    haloInner = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#fff0a8", transparent: true, opacity: 0.62, depthWrite: false, blending: THREE.AdditiveBlending }));
-    haloInner.scale.setScalar(bodyMeta.radius * 6.2);
-    haloOuter = new THREE.Sprite(new THREE.SpriteMaterial({ map: profile.haloTexture, color: "#ff993f", transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
-    haloOuter.scale.setScalar(bodyMeta.radius * 10.5);
-    corona = new THREE.Mesh(
-      new THREE.SphereGeometry(bodyMeta.radius * 1.22, 40, 40),
-      new THREE.MeshBasicMaterial({ color: "#ffb056", transparent: true, opacity: 0.16, depthWrite: false })
-    );
-    root.add(corona, haloInner, haloOuter);
-  }
 
   if (bodyMeta.name === "Saturn") {
     ring = new THREE.Mesh(
@@ -585,16 +617,16 @@ function createBodyVisual(bodyMeta: BodyMetadata, index: number): BodyVisualEntr
   }
 
   solarSystemGroup.add(root);
-  return { metadata: bodyMeta, root, mesh, glow, material, atmosphere, haloInner, haloOuter, corona, ring };
+  return { metadata: bodyMeta, root, mesh, glow, material, atmosphere, ring };
 }
 
-function createTrail(bodyMeta: BodyMetadata): TrailEntry {
+function createTrail(bodyEntry: BodyVisualEntry): TrailEntry {
   const line = new THREE.Line(
     new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: bodyMeta.trail_color, transparent: true, opacity: 0.12 })
+    new THREE.LineBasicMaterial({ color: bodyEntry.metadata.trail_color, transparent: true, opacity: 0.12 })
   );
   solarSystemGroup.add(line);
-  return { line, history: [], maxPoints: QUALITY.trailLength };
+  return { body: bodyEntry, line, history: [], maxPoints: QUALITY.trailLength };
 }
 
 function createCometMaterial(innerColor: string, outerColor: string): THREE.SpriteMaterial {
@@ -662,12 +694,14 @@ function createGravityField(initialFlatPositions: number[]): void {
 
   const earthIndex = metadata.findIndex((bodyMeta) => bodyMeta.name === "Earth");
   const moonIndex = metadata.findIndex((bodyMeta) => bodyMeta.name === "Moon");
-  const earth = new THREE.Vector3(initialFlatPositions[earthIndex * 3], initialFlatPositions[earthIndex * 3 + 1], initialFlatPositions[earthIndex * 3 + 2]).multiplyScalar(DISTANCE_SCALE);
-  const moon = new THREE.Vector3(initialFlatPositions[moonIndex * 3], initialFlatPositions[moonIndex * 3 + 1], initialFlatPositions[moonIndex * 3 + 2]).multiplyScalar(DISTANCE_SCALE);
-  const moonRelative = moon.sub(earth);
-  const moonRadius = Math.sqrt(moonRelative.x * moonRelative.x + moonRelative.z * moonRelative.z);
-  const moonInclination = Math.atan2(moonRelative.y, Math.max(moonRadius, 0.001));
-  moonGuide = createOrbitPath(moonRadius, "#e8edf6", moonInclination, 96);
+  if (earthIndex >= 0 && moonIndex >= 0) {
+    const earth = new THREE.Vector3(initialFlatPositions[earthIndex * 3], initialFlatPositions[earthIndex * 3 + 1], initialFlatPositions[earthIndex * 3 + 2]).multiplyScalar(DISTANCE_SCALE);
+    const moon = new THREE.Vector3(initialFlatPositions[moonIndex * 3], initialFlatPositions[moonIndex * 3 + 1], initialFlatPositions[moonIndex * 3 + 2]).multiplyScalar(DISTANCE_SCALE);
+    const moonRelative = moon.sub(earth);
+    moonOrbitRadius = Math.sqrt(moonRelative.x * moonRelative.x + moonRelative.z * moonRelative.z);
+    moonOrbitInclination = Math.atan2(moonRelative.y, Math.max(moonOrbitRadius, 0.001));
+  }
+  moonGuide = createOrbitPath(moonOrbitRadius, "#e8edf6", moonOrbitInclination, 96);
 }
 
 function buildFocus(): void {
@@ -675,14 +709,25 @@ function buildFocus(): void {
   controls.update();
 }
 
-function updateBodyPositions(flatPositions: ArrayLike<number>): void {
+function updateBodyPositions(flatPositions: ArrayLike<number>, elapsed = 0): void {
+  const earthEntry = bodyEntries.find((entry) => entry.metadata.name === "Earth");
+  const moonEntry = bodyEntries.find((entry) => entry.metadata.name === "Moon");
+
   for (let i = 0; i < bodyEntries.length; i += 1) {
+    if (bodyEntries[i].metadata.name === "Moon") {
+      continue;
+    }
     const offset = i * 3;
     bodyEntries[i].root.position.set(
       flatPositions[offset] * DISTANCE_SCALE,
       flatPositions[offset + 1] * DISTANCE_SCALE,
       flatPositions[offset + 2] * DISTANCE_SCALE
     );
+  }
+
+  if (earthEntry && moonEntry) {
+    const moonAngle = 0.4 + elapsed * 2.2;
+    moonEntry.root.position.copy(earthEntry.root.position).add(getMoonOffset(moonOrbitRadius, moonOrbitInclination, moonAngle));
   }
 
   sunLight.position.copy(bodyEntries[0].root.position);
@@ -694,11 +739,8 @@ function updateBodyPositions(flatPositions: ArrayLike<number>): void {
     gravityFieldGroup.position.copy(bodyEntries[0].root.position);
   }
 
-  if (moonGuide) {
-    const earthEntry = bodyEntries.find((entry) => entry.metadata.name === "Earth");
-    if (earthEntry && moonGuide.parent !== earthEntry.root) {
-      earthEntry.root.add(moonGuide);
-    }
+  if (moonGuide && earthEntry && moonGuide.parent !== earthEntry.root) {
+    earthEntry.root.add(moonGuide);
   }
 }
 
@@ -708,8 +750,8 @@ function updateTrails(): void {
     return;
   }
 
-  trailEntries.forEach((trail, index) => {
-    const point = bodyEntries[index + 1].root.position.clone();
+  trailEntries.forEach((trail) => {
+    const point = trail.body.root.position.clone();
     trail.history.push(point);
     if (trail.history.length > trail.maxPoints) {
       trail.history.shift();
@@ -736,19 +778,8 @@ function updatePlanetLooks(elapsed: number): void {
     entry.mesh.rotation.y += spinMap[entry.metadata.name] ?? 0.0012;
 
     if (entry.metadata.is_sun) {
-      entry.material.emissiveIntensity = 1.95 + Math.sin(elapsed * 2.1) * 0.18;
-      entry.glow.scale.setScalar(1 + 0.06 * Math.sin(elapsed * 1.55));
-      if (entry.corona) {
-        entry.corona.scale.setScalar(1 + 0.03 * Math.sin(elapsed * 1.4));
-      }
-      if (entry.haloInner) {
-        entry.haloInner.material.rotation += 0.0016;
-        entry.haloInner.scale.setScalar(entry.metadata.radius * (6.1 + Math.sin(elapsed * 1.2) * 0.25));
-      }
-      if (entry.haloOuter) {
-        entry.haloOuter.material.rotation -= 0.0009;
-        entry.haloOuter.scale.setScalar(entry.metadata.radius * (10.3 + Math.sin(elapsed * 0.9) * 0.35));
-      }
+      entry.material.emissiveIntensity = 0.32 + Math.sin(elapsed * 2.1) * 0.04;
+      entry.glow.scale.setScalar(1 + 0.02 * Math.sin(elapsed * 1.55));
     }
   });
 }
@@ -944,7 +975,9 @@ async function start(): Promise<void> {
   createNebulaField();
   createStarField();
   bodyEntries = metadata.map((bodyMeta, index) => createBodyVisual(bodyMeta, index));
-  trailEntries = metadata.filter((bodyMeta) => !bodyMeta.is_sun).map((bodyMeta) => createTrail(bodyMeta));
+  trailEntries = bodyEntries
+    .filter((entry) => !entry.metadata.is_sun && entry.metadata.name !== "Moon")
+    .map((entry) => createTrail(entry));
   createGravityField(initialPositions);
   createComets();
   updateBodyPositions(initialPositions);
@@ -958,7 +991,7 @@ async function start(): Promise<void> {
     (scaleState) => {
       const scaleText = document.querySelector("#hud-scale");
       if (scaleText) {
-        scaleText.textContent = `SCALE: ${scaleState.formattedScaleUnit} | DIST: ${scaleState.formattedDistance} | LOG-DEPTH ACTIVE`;
+        scaleText.textContent = `SCALE: ${scaleState.formattedScaleUnit} | DIST: ${scaleState.formattedDistance}`;
       }
     }
   );
@@ -1005,7 +1038,7 @@ async function start(): Promise<void> {
 
     simulation.update(delta, 1);
     if (!isMacro) {
-      updateBodyPositions(simulation.get_positions());
+      updateBodyPositions(simulation.get_positions(), elapsed);
       updateTrails();
       updatePlanetLooks(elapsed);
       updateBackground(elapsed, delta);
@@ -1029,7 +1062,7 @@ async function start(): Promise<void> {
     if (perfFrameCounter++ % 15 === 0) {
       const perfElement = document.querySelector("#hud-perf");
       if (perfElement) {
-        perfElement.textContent = `FPS: ${metrics.fps} (${metrics.frameTimeMs}ms) | CALLS: ${metrics.drawCalls} | TIER: ${metrics.tier}`;
+        perfElement.textContent = `TIER: ${metrics.tier}`;
       }
     }
 
